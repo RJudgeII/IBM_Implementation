@@ -1,0 +1,19 @@
+{
+   "id": "abcdefghijkl",
+   "control_instrument": "ACME",
+   "initial_value": 10,
+   "operations": [
+      {
+         "type": "Sum",
+         "value": 120
+      },
+      {
+         "type": "Mul",
+         "value": 3
+      },
+      {
+         "type": "Div",
+         "value": 2
+      }
+   ]
+}

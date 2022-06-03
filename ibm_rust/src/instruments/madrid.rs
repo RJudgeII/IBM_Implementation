@@ -1,8 +1,8 @@
-use crate::errors::invalid_operation_error::InvalidOperationError;
-use crate::programs::quantum_program::Operation;
 use crate::instruments::acts_as_control::ActsAsControl;
+use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
-use std::io;
+
+use super::acts_as_control::{PostResponse, GetResponse};
 
 #[derive(Deserialize, Serialize)]
 pub struct Madrid {
@@ -10,44 +10,14 @@ pub struct Madrid {
 }
 
 impl Madrid {
-  pub fn new(initial_value: f64, operations: Vec<Operation>) -> Box<dyn ActsAsControl> {
-    let mut program_code = Self::initialize_program_code(initial_value);
-    Self::parse_operations(&mut program_code, operations);
-    Box::new(Self { program_code })
-  }
-
-  fn initialize_program_code(initial_value: f64) -> Vec<String> {
-    let mut initial_code: Vec<String> = Vec::new();
-    initial_code.push(initial_value.to_string());
-    initial_code.push(String::from("Madrid_initial_state_pulse"));
-    initial_code
-  }
-
-  fn parse_operations(program_code: &mut Vec<String>, operations: Vec<Operation>) -> Result<Vec<String>, InvalidOperationError> {
-    for operation in operations {
-      match operation.op_type.to_uppercase().as_str() {
-        "SUM" => {
-          program_code.push(operation.value.to_string());
-          program_code.push(String::from("Madrid_pulse_1"));
-        },
-        "MUL" => {
-          program_code.push(operation.value.to_string());
-          program_code.push(String::from("Madrid_pulse_2"));
-          program_code.push(String::from("Madrid_pulse_2"));
-        },
-        "DIV" => {
-          program_code.push(operation.value.to_string());
-          program_code.push(String::from("Madrid_pulse_2"));
-          program_code.push(String::from("Madrid_pulse_1"));
-        },
-        _ => { return Err(InvalidOperationError); },
-      };
+  pub fn new() -> Self {
+    Self {
+      program_code: Vec::new(),
     }
-
-    Ok((&program_code).to_vec())
   }
 }
 
+#[async_trait]
 #[typetag::serde]
 impl ActsAsControl for Madrid {
   fn port_number(&self) -> String {
@@ -60,5 +30,60 @@ impl ActsAsControl for Madrid {
 
   fn get_url(&self) -> String {
     String::from("program/run")
+  }
+
+  fn set_initial(&self, program_code: &mut Vec<String>, value: f64) {
+    program_code.push(value.to_string());
+    program_code.push(String::from("Madrid_initial_state_pulse"));
+  }
+
+  fn set_sum(&self, program_code: &mut Vec<String>, value: f64) {
+    program_code.push(value.to_string());
+    program_code.push(String::from("Madrid_pulse_1"));
+  }
+
+  fn set_mul(&self, program_code: &mut Vec<String>, value: f64) {
+    program_code.push(value.to_string());
+    program_code.push(String::from("Madrid_pulse_2"));
+    program_code.push(String::from("Madrid_pulse_2"));
+  }
+
+  fn set_div(&self, program_code: &mut Vec<String>, value: f64) {
+    if value == 0.0 { panic!("Tried to divide by zero."); }
+    program_code.push(value.to_string());
+    program_code.push(String::from("Madrid_pulse_2"));
+    program_code.push(String::from("Madrid_pulse_1"));
+  }
+
+  async fn load_program(&self, client: reqwest::Client) -> PostResponse {
+    let json = serde_json::to_string(&self).unwrap();
+    let url = String::from("http://127.0.0.1:") + &self.port_number() + "/" + &self.post_url();
+
+    let response: PostResponse = client
+      .post(url)
+      .body(json)
+      .send()
+      .await
+      .unwrap()
+      .json()
+      .await
+      .unwrap();
+    response
+  }
+
+  async fn run_program(&self, 
+    post_response: PostResponse,
+    client: reqwest::Client,
+  ) -> GetResponse {
+    let url = String::from("http://127.0.0.1:")
+      + &self.port_number()
+      + "/"
+      + &self.get_url()
+      + "/"
+      + &post_response.program_id;
+  
+    let response: GetResponse = client.get(url).send().await.unwrap().json().await.unwrap();
+  
+    response
   }
 }
