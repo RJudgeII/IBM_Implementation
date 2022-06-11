@@ -7,7 +7,7 @@ use super::{acme::Acme, madrid::Madrid};
 
 #[async_trait]
 #[typetag::serde(tag = "type", content = "value")]
-pub trait ActsAsControl {
+pub trait ActsAsControl: Send + Sync {
   fn port_number(&self) -> String;
   fn post_url(&self) -> String;
   fn get_url(&self) -> String;
@@ -42,7 +42,7 @@ pub trait ActsAsControl {
     initial_code
   }
 
-  //  These two are here because the exercise said to not assume all control 
+  //  These two are here because the exercise said to not assume all control
   //    instruments are REST services. As long as the output of these methods
   //    are conformed to the listed types, we can have any kind of load/run.
   async fn load_program(&self, client: reqwest::Client) -> PostResponse;
@@ -87,8 +87,6 @@ pub struct GetResponse {
   pub result: f64,
 }
 
-
-
 #[cfg(test)]
 mod program_tests {
   use super::*;
@@ -97,7 +95,9 @@ mod program_tests {
   #[should_panic]
   fn test_empty_input() {
     let q_program = QuantumProgram::new("".to_string(), "".to_string(), 0.0, Vec::new());
-    if let None = ControlMaker::new_instrument(q_program) { panic!("Got 'None' from create new instrument"); }
+    if let None = ControlMaker::new_instrument(q_program) {
+      panic!("Got 'None' from create new instrument");
+    }
   }
 
   #[test]
@@ -107,7 +107,12 @@ mod program_tests {
     let op = Operation::new("Div".to_string(), 0.0);
     ops_list.push(op);
 
-    let q_program = QuantumProgram::new("div_zero_test".to_string(), "Acme".to_string(), 10.0, ops_list);
+    let q_program = QuantumProgram::new(
+      "div_zero_test".to_string(),
+      "Acme".to_string(),
+      10.0,
+      ops_list,
+    );
     ControlMaker::new_instrument(q_program);
   }
 }
